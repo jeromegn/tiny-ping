@@ -1,18 +1,18 @@
 #[derive(Debug)]
 pub enum Error {
     InvalidProtocol,
-    InternalError,
+    Internal,
     TooSmallHeader,
     InvalidHeaderSize,
     InvalidVersion,
     UnknownProtocol,
     InvalidSize,
     InvalidPacket,
-    IoError,
+    Io,
 }
 
 impl From<std::io::Error> for Error {
     fn from(_: std::io::Error) -> Self {
-        Self::IoError
+        Self::Io
     }
 }
