@@ -1,6 +1,5 @@
 use std::{convert::TryInto, net::IpAddr};
 
-use log::trace;
 use pnet_packet::{
     icmp::{
         self, echo_reply::EchoReplyPacket, echo_request::MutableEchoRequestPacket, IcmpPacket,
@@ -11,7 +10,7 @@ use pnet_packet::{
     Packet,
 };
 
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 
 #[derive(Debug)]
 pub struct EchoRequest {
@@ -48,8 +47,7 @@ impl EchoRequest {
         packet.set_sequence_number(self.seq_cnt);
 
         // Calculate and set the checksum
-        let icmp_packet =
-            IcmpPacket::new(packet.packet()).ok_or(Error::IncorrectBufferSize)?;
+        let icmp_packet = IcmpPacket::new(packet.packet()).ok_or(Error::IncorrectBufferSize)?;
         let checksum = icmp::checksum(&icmp_packet);
         packet.set_checksum(checksum);
 
@@ -96,22 +94,20 @@ impl EchoReply {
     /// Unpack IP packets received from socket as `EchoReply` struct.
     pub fn decode(addr: IpAddr, buf: &[u8]) -> Result<EchoReply> {
         match addr {
-            IpAddr::V4(_) => decode_icmpv4(addr, &buf),
-            IpAddr::V6(_) => decode_icmpv6(addr, &buf),
+            IpAddr::V4(_) => decode_icmpv4(addr, buf),
+            IpAddr::V6(_) => decode_icmpv6(addr, buf),
         }
     }
 }
 
 /// Decodes an ICMPv4 packet received from an IPv4 raw socket
 fn decode_icmpv4(addr: IpAddr, buf: &[u8]) -> Result<EchoReply> {
-    let ipv4 = Ipv4Packet::new(buf)
-        .ok_or_else(|| Error::from(Error::NotIpv4Packet))?;
+    let ipv4 = Ipv4Packet::new(buf).ok_or(Error::NotIpv4Packet)?;
     let payload = ipv4.payload();
-    let icmp_packet = IcmpPacket::new(payload)
-        .ok_or_else(|| Error::from(Error::NotIcmpPacket))?;
+    let icmp_packet = IcmpPacket::new(payload).ok_or(Error::NotIcmpPacket)?;
     let ty = icmp_packet.get_icmp_type();
     if ty != IcmpTypes::EchoReply {
-        trace!(
+        eprintln!(
             "type={:?},code={:?},src={},dst={}",
             ty,
             icmp_packet.get_icmp_code(),
@@ -138,11 +134,10 @@ fn decode_icmpv6(addr: IpAddr, buf: &[u8]) -> Result<EchoReply> {
     // *do not* provide access to the complete packet, only the payload,
     // so there is no need to extract the payload as there is for ICMPv4
     // packets.
-    let icmp_packet = Icmpv6Packet::new(buf)
-        .ok_or_else(|| Error::from(Error::NotIcmpv6Packet))?;
+    let icmp_packet = Icmpv6Packet::new(buf).ok_or(Error::NotIcmpv6Packet)?;
     let ty = icmp_packet.get_icmpv6_type();
     if ty != Icmpv6Types::EchoReply {
-        trace!(
+        eprintln!(
             "type={:?},code={:?},src={}",
             ty,
             icmp_packet.get_icmpv6_code(),
@@ -159,8 +154,7 @@ fn decode_icmpv6(addr: IpAddr, buf: &[u8]) -> Result<EchoReply> {
         return Err(Error::PayloadTooShort {
             got: payload.len(),
             want: 4,
-        }
-        .into());
+        });
     }
     let identifier = u16::from_be_bytes(payload[0..2].try_into().unwrap());
     let sequence = u16::from_be_bytes(payload[2..4].try_into().unwrap());

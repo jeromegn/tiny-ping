@@ -7,7 +7,6 @@ use std::{
 };
 
 use parking_lot::Mutex;
-use rand::random;
 use tokio::task;
 use tokio::time::timeout;
 
@@ -54,7 +53,7 @@ impl Pinger {
     pub fn new(host: IpAddr) -> Result<Pinger> {
         Ok(Pinger {
             host,
-            ident: random(),
+            ident: 1,
             size: 56,
             timeout: Duration::from_secs(2),
             socket: AsyncSocket::new(host)?,
