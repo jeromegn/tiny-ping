@@ -1,6 +1,6 @@
 [package]
 name = "tiny-ping"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Lucas Rooyakkers <lucas.rooyakkers@pm.me>", "An Long <aisk1988@gmail.com>"]
 license = "MIT"
 description = "Small ICMP library"
@@ -9,4 +9,3 @@ edition = "2018"
 
 [dependencies]
 socket2 = { version = "0.4", features = ["all"] }
-rand = "0.7"

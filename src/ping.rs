@@ -3,7 +3,6 @@ use core::mem::MaybeUninit;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
-use rand::random;
 use socket2::{Domain, Protocol, Socket, Type};
 
 use crate::errors::Error;
@@ -29,11 +28,11 @@ pub fn ping(
     let dest = SocketAddr::new(addr, 0);
     let mut buffer = [0; ECHO_REQUEST_BUFFER_SIZE];
 
-    let default_payload: &Token = &random();
+    let default_payload: &Token = &[0; TOKEN_SIZE];
 
     let request = EchoRequest {
-        ident: ident.unwrap_or_else(random),
-        seq_cnt: seq_cnt.unwrap_or(1),
+        ident: ident.unwrap_or(0),
+        seq_cnt: seq_cnt.unwrap_or(0),
         payload: payload.unwrap_or(default_payload),
     };
 
