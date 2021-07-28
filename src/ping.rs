@@ -1,77 +1,171 @@
-use std::net::{IpAddr, SocketAddr};
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    mem::MaybeUninit,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use socket2::{Domain, Protocol, Socket, Type};
+use parking_lot::Mutex;
+use rand::random;
+use tokio::task;
+use tokio::time::{sleep, timeout};
 
-use crate::errors::Error;
-use crate::packet::{EchoReply, EchoRequest, IcmpV4, IcmpV6, IpV4Packet, ICMP_HEADER_SIZE};
+use crate::error::{Result, Error};
+use crate::icmp::{EchoReply, EchoRequest};
+use crate::unix::AsyncSocket;
 
-const TOKEN_SIZE: usize = 24;
-const ECHO_REQUEST_BUFFER_SIZE: usize = ICMP_HEADER_SIZE + TOKEN_SIZE;
-type Token = [u8; TOKEN_SIZE];
+type Token = (u16, u16);
 
-pub fn ping(
-    addr: IpAddr,
-    timeout: Option<Duration>,
-    ttl: Option<u32>,
-    ident: Option<u16>,
-    seq_cnt: Option<u16>,
-    payload: Option<&Token>,
-) -> Result<(), Error> {
-    let timeout = match timeout {
-        Some(timeout) => Some(timeout),
-        None => Some(Duration::from_secs(4)),
-    };
+#[derive(Debug, Clone)]
+struct Cache {
+    inner: Arc<Mutex<HashMap<Token, Instant>>>,
+}
 
-    let dest = SocketAddr::new(addr, 0);
-    let mut buffer = [0; ECHO_REQUEST_BUFFER_SIZE];
-
-    let default_payload: &Token = &[0; TOKEN_SIZE];
-
-    let request = EchoRequest {
-        ident: ident.unwrap_or(0),
-        seq_cnt: seq_cnt.unwrap_or(0),
-        payload: payload.unwrap_or(default_payload),
-    };
-
-    let socket = if dest.is_ipv4() {
-        if request.encode::<IcmpV4>(&mut buffer[..]).is_err() {
-            return Err(Error::Internal);
+impl Cache {
+    fn new() -> Cache {
+        Cache {
+            inner: Arc::new(Mutex::new(HashMap::new())),
         }
-        Socket::new(Domain::ipv4(), Type::raw(), Some(Protocol::icmpv4()))?
-    } else {
-        if request.encode::<IcmpV6>(&mut buffer[..]).is_err() {
-            return Err(Error::Internal);
+    }
+
+    fn insert(&self, ident: u16, seq_cnt: u16, time: Instant) {
+        self.inner.lock().insert((ident, seq_cnt), time);
+    }
+
+    fn remove(&self, ident: u16, seq_cnt: u16) -> Option<Instant> {
+        self.inner.lock().remove(&(ident, seq_cnt))
+    }
+}
+
+/// A Ping struct represents the state of one particular ping instance.
+#[derive(Debug, Clone)]
+pub struct Pinger {
+    host: IpAddr,
+    ident: u16,
+    size: usize,
+    timeout: Duration,
+    socket: AsyncSocket,
+    cache: Cache,
+}
+
+impl Pinger {
+    /// Creates a new Ping instance from `IpAddr`.
+    pub fn new(host: IpAddr) -> Result<Pinger> {
+        Ok(Pinger {
+            host,
+            ident: random(),
+            size: 56,
+            timeout: Duration::from_secs(2),
+            socket: AsyncSocket::new(host)?,
+            cache: Cache::new(),
+        })
+    }
+
+    /// Sets the value for the `SO_BINDTODEVICE` option on this socket.
+    ///
+    /// If a socket is bound to an interface, only packets received from that
+    /// particular interface are processed by the socket. Note that this only
+    /// works for some socket types, particularly `AF_INET` sockets.
+    ///
+    /// If `interface` is `None` or an empty string it removes the binding.
+    ///
+    /// This function is only available on Fuchsia and Linux.
+    #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+    pub fn bind_device(&mut self, interface: Option<&[u8]>) -> Result<&mut Pinger> {
+        self.socket.bind_device(interface)?;
+        Ok(self)
+    }
+
+    /// Set the identification of ICMP.
+    pub fn ident(&mut self, val: u16) -> &mut Pinger {
+        self.ident = val;
+        self
+    }
+
+    /// Set the packet size.(default: 56)
+    pub fn size(&mut self, size: usize) -> &mut Pinger {
+        self.size = size;
+        self
+    }
+
+    /// The timeout of each Ping, in seconds. (default: 2s)
+    pub fn timeout(&mut self, timeout: Duration) -> &mut Pinger {
+        self.timeout = timeout;
+        self
+    }
+
+    async fn recv_reply(&self, seq_cnt: u16) -> Result<(EchoReply, Duration)> {
+        let mut buffer = [MaybeUninit::new(0); 2048];
+        loop {
+            let size = self.socket.recv(&mut buffer).await?;
+            let buf = unsafe { assume_init(&buffer[..size]) };
+            match EchoReply::decode(self.host, buf) {
+                Ok(reply) => {
+                    // check reply ident is same
+                    if reply.identifier == self.ident && reply.sequence == seq_cnt {
+                        if let Some(ins) = self.cache.remove(self.ident, seq_cnt) {
+                            return Ok((reply, Instant::now() - ins));
+                        }
+                    }
+                    continue;
+                }
+                Err(Error::NotEchoReply(_)) => continue,
+                Err(Error::NotV6EchoReply(_)) => continue,
+                Err(Error::OtherICMP) => continue,
+                Err(e) => {
+                    return Err(e);
+                }
+            }
         }
-        Socket::new(Domain::ipv6(), Type::raw(), Some(Protocol::icmpv6()))?
-    };
+    }
 
-    socket.set_ttl(ttl.unwrap_or(64))?;
+    /// Send Ping request with sequence number.
+    pub async fn ping(&self, seq_cnt: u16) -> Result<(EchoReply, Duration)> {
+        let sender = self.socket.clone();
+        let mut packet = EchoRequest::new(self.host, self.ident, seq_cnt, self.size).encode()?;
+        let sock_addr = SocketAddr::new(self.host, 0);
+        let ident = self.ident;
+        let cache = self.cache.clone();
+        task::spawn(async move {
+            let _size = sender
+                .send_to(&mut packet, &sock_addr.into())
+                .await
+                .expect("socket send packet error");
+            cache.insert(ident, seq_cnt, Instant::now());
+        });
 
-    socket.set_write_timeout(timeout)?;
+        /*
+        let reply = self.recv_reply(seq_cnt).map_err(|err| {
+            self.cache.remove(ident, seq_cnt);
+            err
+        })?;
+        */
 
-    socket.send_to(&buffer, &dest.into())?;
+        timeout(self.timeout, self.recv_reply(seq_cnt)).await.map_err(|err| {
+            self.cache.remove(ident, seq_cnt);
+            err
+        }).unwrap()
 
-    socket.set_read_timeout(timeout)?;
-
-    let mut buffer: [u8; 2048] = [0; 2048];
-    socket.recv_from(&mut buffer)?;
-
-    let _reply = if dest.is_ipv4() {
-        let ipv4_packet = match IpV4Packet::decode(&buffer) {
-            Ok(packet) => packet,
-            Err(_) => return Err(Error::Internal),
-        };
-        match EchoReply::decode::<IcmpV4>(ipv4_packet.data) {
-            Ok(reply) => reply,
-            Err(_) => return Err(Error::Internal),
+        /*
+        tokio::select! {
+            reply = self.recv_reply(seq_cnt) => {
+                reply.map_err(|err| {
+                    self.cache.remove(ident, seq_cnt);
+                    err
+                })
+            },
+            _ = sleep(self.timeout) => {
+                self.cache.remove(ident, seq_cnt);
+                Err(Error::Timeout)
+            },
         }
-    } else {
-        match EchoReply::decode::<IcmpV6>(&buffer) {
-            Ok(reply) => reply,
-            Err(_) => return Err(Error::Internal),
-        }
-    };
+        */
+    }
+}
 
-    Ok(())
+/// Assume the `buf`fer to be initialised.
+// TODO: replace with `MaybeUninit::slice_assume_init_ref` once stable.
+unsafe fn assume_init(buf: &[MaybeUninit<u8>]) -> &[u8] {
+    &*(buf as *const [MaybeUninit<u8>] as *const [u8])
 }

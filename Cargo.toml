@@ -1,11 +1,16 @@
 [package]
 name = "tiny-ping"
-version = "0.3.3"
-authors = ["Lucas Rooyakkers <lucas.rooyakkers@pm.me>", "An Long <aisk1988@gmail.com>"]
+version = "0.4.0"
+authors = ["Lucas Rooyakkers <lucas.rooyakkers@pm.me>", "An Long <aisk1988@gmail.com>", "kolapapa <milk346512016@gmail.com>"]
 license = "MIT"
-description = "Small ICMP library"
+description = "Small Asynchronous ICMP library"
 repository = "https://github.com/Fierthraix/ping"
 edition = "2018"
 
 [dependencies]
-socket2 = "0.3"
+log = "0.4.14"
+parking_lot = "0.11.1"
+pnet_packet = "0.27.2"
+rand = "0.8.3"
+socket2 = { version = "0.4.0", features = ["all"] }
+tokio = { version = "1.5", features = ["net", "rt", "time"] }

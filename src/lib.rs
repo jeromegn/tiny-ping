@@ -1,5 +1,8 @@
-mod errors;
-mod packet;
+mod error;
+mod icmp;
 mod ping;
+mod unix;
 
-pub use crate::ping::ping;
+pub use error::Error;
+pub use icmp::EchoReply;
+pub use ping::Pinger;
