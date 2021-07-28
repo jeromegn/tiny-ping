@@ -8,5 +8,5 @@ repository = "https://github.com/Fierthraix/ping"
 edition = "2018"
 
 [dependencies]
-socket2 = "0.3"
+socket2 = { version = "0.4", features = ["all"] }
 rand = "0.7"

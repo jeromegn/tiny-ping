@@ -1,3 +1,5 @@
+use core::mem::MaybeUninit;
+
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
@@ -39,12 +41,12 @@ pub fn ping(
         if request.encode::<IcmpV4>(&mut buffer[..]).is_err() {
             return Err(Error::Internal);
         }
-        Socket::new(Domain::ipv4(), Type::raw(), Some(Protocol::icmpv4()))?
+        Socket::new(Domain::IPV4, Type::RAW, Some(Protocol::ICMPV4))?
     } else {
         if request.encode::<IcmpV6>(&mut buffer[..]).is_err() {
             return Err(Error::Internal);
         }
-        Socket::new(Domain::ipv6(), Type::raw(), Some(Protocol::icmpv6()))?
+        Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?
     };
 
     socket.set_ttl(ttl.unwrap_or(64))?;
@@ -55,8 +57,10 @@ pub fn ping(
 
     socket.set_read_timeout(timeout)?;
 
-    let mut buffer: [u8; 2048] = [0; 2048];
-    socket.recv_from(&mut buffer)?;
+    let buffer: [u8; 2048] = [0; 2048];
+    let mut maybe_uninit_buffer: [MaybeUninit<u8>; 2048] = [MaybeUninit::new(0); 2048];
+    //let mut buffer = vec![0; 2048];
+    socket.recv_from(&mut maybe_uninit_buffer)?;
 
     let _reply = if dest.is_ipv4() {
         let ipv4_packet = match IpV4Packet::decode(&buffer) {
