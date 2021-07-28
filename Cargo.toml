@@ -1,6 +1,6 @@
 [package]
 name = "tiny-ping"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Lucas Rooyakkers <lucas.rooyakkers@pm.me>", "An Long <aisk1988@gmail.com>"]
 license = "MIT"
 description = "Small ICMP library"
@@ -8,4 +8,4 @@ repository = "https://github.com/Fierthraix/ping"
 edition = "2018"
 
 [dependencies]
-socket2 = { version = "0.4", features = ["all"] }
+socket2 = "0.3"
