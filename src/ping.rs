@@ -9,9 +9,9 @@ use std::{
 use parking_lot::Mutex;
 use rand::random;
 use tokio::task;
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 use crate::icmp::{EchoReply, EchoRequest};
 use crate::unix::AsyncSocket;
 
@@ -135,32 +135,15 @@ impl Pinger {
             cache.insert(ident, seq_cnt, Instant::now());
         });
 
-        /*
-        let reply = self.recv_reply(seq_cnt).map_err(|err| {
-            self.cache.remove(ident, seq_cnt);
-            err
-        })?;
-        */
-
-        timeout(self.timeout, self.recv_reply(seq_cnt)).await.map_err(|err| {
-            self.cache.remove(ident, seq_cnt);
-            err
-        }).unwrap()
-
-        /*
-        tokio::select! {
-            reply = self.recv_reply(seq_cnt) => {
-                reply.map_err(|err| {
-                    self.cache.remove(ident, seq_cnt);
-                    err
-                })
-            },
-            _ = sleep(self.timeout) => {
+        match timeout(self.timeout, self.recv_reply(seq_cnt))
+            .await
+            .map_err(|err| {
                 self.cache.remove(ident, seq_cnt);
-                Err(Error::Timeout)
-            },
+                err
+            }) {
+            Ok(rez) => rez,
+            Err(_) => Err(Error::OtherICMP),
         }
-        */
     }
 }
 
