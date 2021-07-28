@@ -1,15 +1,18 @@
-use thiserror::Error;
-
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("invalid procotol")]
     InvalidProtocol,
-    #[error("internal error")]
     InternalError,
-    #[error("io error: {error}")]
-    IoError {
-        #[from]
-        #[source]
-        error: ::std::io::Error
+    TooSmallHeader,
+    InvalidHeaderSize,
+    InvalidVersion,
+    UnknownProtocol,
+    InvalidSize,
+    InvalidPacket,
+    IoError,
+}
+
+impl From<std::io::Error> for Error {
+    fn from(_: std::io::Error) -> Self {
+        Self::IoError
     }
 }

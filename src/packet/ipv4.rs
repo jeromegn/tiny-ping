@@ -1,16 +1,4 @@
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("too small header")]
-    TooSmallHeader,
-    #[error("invalid header size")]
-    InvalidHeaderSize,
-    #[error("invalid version")]
-    InvalidVersion,
-    #[error("unknown protocol")]
-    UnknownProtocol,
-}
+use crate::errors::Error;
 
 const MINIMUM_PACKET_SIZE: usize = 20;
 

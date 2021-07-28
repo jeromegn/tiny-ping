@@ -1,10 +1,10 @@
-# rust ping
+# rust tiny-ping
 
 [![Crates.io](https://img.shields.io/crates/v/ping.svg)](https://crates.io/crates/ping)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Docs](https://docs.rs/ping/badge.svg)](https://docs.rs/ping/)
 
-Ping function implemented in rust.
+Ping function implemented in rust, made for small compile times.
 
 ## License
 
