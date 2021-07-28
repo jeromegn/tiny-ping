@@ -107,7 +107,7 @@ fn decode_icmpv4(addr: IpAddr, buf: &[u8]) -> Result<EchoReply> {
     let icmp_packet = IcmpPacket::new(payload).ok_or(Error::NotIcmpPacket)?;
     let ty = icmp_packet.get_icmp_type();
     if ty != IcmpTypes::EchoReply {
-        eprintln!(
+        log::trace!(
             "type={:?},code={:?},src={},dst={}",
             ty,
             icmp_packet.get_icmp_code(),
@@ -137,7 +137,7 @@ fn decode_icmpv6(addr: IpAddr, buf: &[u8]) -> Result<EchoReply> {
     let icmp_packet = Icmpv6Packet::new(buf).ok_or(Error::NotIcmpv6Packet)?;
     let ty = icmp_packet.get_icmpv6_type();
     if ty != Icmpv6Types::EchoReply {
-        eprintln!(
+        log::trace!(
             "type={:?},code={:?},src={}",
             ty,
             icmp_packet.get_icmpv6_code(),
