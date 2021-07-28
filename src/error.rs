@@ -1,5 +1,3 @@
-use pnet_packet::{icmp::IcmpType, icmpv6::Icmpv6Type};
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// An error resulting from a ping option-setting or send/receive operation.
@@ -11,10 +9,17 @@ pub enum Error {
     NotIcmpv6Packet,
     PayloadTooShort { got: usize, want: usize },
     IOError(String),
-    NotEchoReply(IcmpType),
-    NotV6EchoReply(Icmpv6Type),
+    NotEchoReply,
+    NotV6EchoReply,
     Timeout,
     OtherICMP,
+    InvalidSize,
+    InvalidPacket,
+    TooSmallHeader,
+    InvalidHeaderSize,
+    InvalidVersion,
+    UnknownProtocol,
+    Unimplemented,
 }
 
 impl From<std::io::Error> for Error {

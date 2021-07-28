@@ -109,8 +109,8 @@ impl Pinger {
                     }
                     continue;
                 }
-                Err(Error::NotEchoReply(_)) => continue,
-                Err(Error::NotV6EchoReply(_)) => continue,
+                Err(Error::NotEchoReply) => continue,
+                Err(Error::NotV6EchoReply) => continue,
                 Err(Error::OtherICMP) => continue,
                 Err(e) => {
                     return Err(e);
@@ -141,7 +141,7 @@ impl Pinger {
                 err
             }) {
             Ok(rez) => rez,
-            Err(_) => Err(Error::OtherICMP),
+            Err(_) => Err(Error::Timeout),
         }
     }
 }
