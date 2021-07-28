@@ -8,11 +8,11 @@ pub enum Error {
     UnknownProtocol,
     InvalidSize,
     InvalidPacket,
-    Io,
+    Io(String),
 }
 
 impl From<std::io::Error> for Error {
-    fn from(_: std::io::Error) -> Self {
-        Self::Io
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error.to_string())
     }
 }
