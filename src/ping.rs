@@ -127,11 +127,11 @@ impl Pinger {
         let ident = self.ident;
         let cache = self.cache.clone();
         task::spawn(async move {
+            cache.insert(ident, seq_cnt, Instant::now());
             let _size = sender
                 .send_to(&mut packet, &sock_addr.into())
                 .await
                 .expect("socket send packet error");
-            cache.insert(ident, seq_cnt, Instant::now());
         });
 
         match timeout(self.timeout, self.recv_reply(seq_cnt))
